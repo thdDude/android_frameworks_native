@@ -34,6 +34,10 @@
 
 #include <private/gui/ComposerService.h>
 
+#ifdef QCOM_BSP
+#include <gralloc_priv.h>
+#endif
+
 namespace android {
 
 Surface::Surface(
@@ -72,7 +76,7 @@ Surface::Surface(
     mTransformHint = 0;
     mConsumerRunningBehind = false;
     mConnectedToCpu = false;
-#ifdef BOARD_EGL_NEEDS_LEGACY_FB
+#ifdef SURFACE_SKIP_FIRST_DEQUEUE
     mDequeuedOnce = false;
 #endif
 }
@@ -221,7 +225,7 @@ int Surface::dequeueBuffer(android_native_buffer_t** buffer,
     }
 
     *buffer = gbuf.get();
-#ifdef BOARD_EGL_NEEDS_LEGACY_FB
+#ifdef SURFACE_SKIP_FIRST_DEQUEUE
     if (!mDequeuedOnce) mDequeuedOnce = true;
 #endif
     return OK;
@@ -312,7 +316,7 @@ int Surface::query(int what, int* value) const {
                 }
                 break;
             case NATIVE_WINDOW_QUEUES_TO_WINDOW_COMPOSER: {
-#ifdef BOARD_EGL_NEEDS_LEGACY_FB
+#ifdef SURFACE_SKIP_FIRST_DEQUEUE
                 if (!mDequeuedOnce) {
                     *value = 0;
                 } else
@@ -787,8 +791,15 @@ status_t Surface::lock(
             return err;
         }
         // we're intending to do software rendering from this point
-        setUsage(mReqUsage | GRALLOC_USAGE_SW_READ_OFTEN |
-                GRALLOC_USAGE_SW_WRITE_OFTEN);
+        // Do not overwrite the mReqUsage flag which was set by the client
+#ifdef QCOM_BSP
+        setUsage(mReqUsage & GRALLOC_USAGE_PRIVATE_EXTERNAL_ONLY |
+                mReqUsage & GRALLOC_USAGE_PRIVATE_INTERNAL_ONLY |
+                    GRALLOC_USAGE_SW_READ_OFTEN |
+                    GRALLOC_USAGE_SW_WRITE_OFTEN);
+#else
+        setUsage(GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN);
+#endif
     }
 
     ANativeWindowBuffer* out;
